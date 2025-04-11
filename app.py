@@ -1,18 +1,22 @@
 import os
+import pickle
+import hashlib
 import streamlit as st
 import requests
-import json
-import time
-from PyPDF2 import PdfReader
-import tempfile
-from datetime import datetime
-from transformers import AutoTokenizer
 import numpy as np
+from PyPDF2 import PdfReader
+from datetime import datetime
+from transformers import GPT2Tokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Конфигурация
+CACHE_DIR = "cache"
+DOCS_DIR = "docs"
+os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(DOCS_DIR, exist_ok=True)
+
 # Инициализация токенизатора
-from transformers import GPT2Tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
 # Настройки Streamlit
@@ -41,14 +45,8 @@ st.sidebar.title("TEST-passer (AI-ассистент по тестам)")
 st.sidebar.divider()
 st.sidebar.write(
     """
-    Это приложение выполнено в целях помощи студентам при сдаче тестов по ЛЮБОЙ образовательной теме.                  
-    
-    1. Как это работает? 
-    
-    Приложение использует материалы из папки docs для ответов на вопросы. 
-    TEST-passer отвечает на тесты, выбирая правильные ответы. Точность ответов на тестировании составила 88%.
-    
-    [Остальное описание остается без изменений...]
+    Это приложение использует предобработанные материалы из папки docs для быстрых ответов.
+    Все документы автоматически кэшируются для ускорения работы.
     """
 )
 
@@ -63,15 +61,12 @@ st.markdown("""
         flex-direction: column;
         margin-top: 0vh;
     }
-    .github-icon:hover {
-        color: #4078c0;
-    }
     </style>
     <div class="center">
         <img src="https://github.com/UzunDemir/mnist_777/blob/main/200w.gif?raw=true">
         <h1>TEST-passer</h1>
         <h2>AI-ассистент по тестам</h2>
-        <p> (строго по учебным материалам)</p>
+        <p>(строго по учебным материалам)</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -94,15 +89,14 @@ class DocumentChunk:
         self.text = text
         self.doc_name = doc_name
         self.page_num = page_num
-        self.embedding = None
 
 class KnowledgeBase:
     def __init__(self):
         self.chunks = []
-        self.uploaded_files = []
         self.vectorizer = TfidfVectorizer(stop_words='english')
         self.tfidf_matrix = None
         self.doc_texts = []
+        self.loaded_files = set()
     
     def split_text(self, text, max_tokens=2000):
         paragraphs = text.split('\n\n')
@@ -133,7 +127,7 @@ class KnowledgeBase:
             
         return chunks
     
-    def load_pdf(self, file_path, file_name):
+    def process_pdf(self, file_path, file_name):
         try:
             with open(file_path, 'rb') as file:
                 reader = PdfReader(file)
@@ -148,21 +142,16 @@ class KnowledgeBase:
                                 page_num=page_num + 1
                             ))
                             self.doc_texts.append(chunk)
-                
-                if self.chunks:
-                    self.uploaded_files.append(file_name)
-                    # Обновляем TF-IDF матрицу
-                    self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
-                    return True
-                else:
-                    st.error(f"Не удалось извлечь текст из файла {file_name}")
-                    return False
+                return True
         except Exception as e:
-            st.error(f"Ошибка загрузки PDF: {e}")
+            st.error(f"Ошибка обработки PDF {file_name}: {e}")
             return False
     
+    def build_vectorizer(self):
+        if self.doc_texts:
+            self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
+    
     def find_most_relevant_chunks(self, query, top_k=3):
-        """Находит наиболее релевантные чанки с помощью TF-IDF и косинусного сходства"""
         if not self.chunks:
             return []
             
@@ -173,32 +162,100 @@ class KnowledgeBase:
         return [(self.chunks[i].text, self.chunks[i].doc_name, self.chunks[i].page_num) 
                 for i in top_indices if similarities[0][i] > 0.1]
     
-    def get_document_names(self):
-        return self.uploaded_files
+    def save_to_cache(self):
+        cache_file = os.path.join(CACHE_DIR, "knowledge_base.cache")
+        with open(cache_file, 'wb') as f:
+            pickle.dump({
+                'chunks': self.chunks,
+                'doc_texts': self.doc_texts,
+                'vectorizer': self.vectorizer,
+                'tfidf_matrix': self.tfidf_matrix,
+                'loaded_files': self.loaded_files
+            }, f)
+        
+        # Сохраняем хеш файлов
+        hash_file = os.path.join(CACHE_DIR, "files_hash.txt")
+        with open(hash_file, 'w') as f:
+            f.write(self.get_files_hash())
+    
+    def load_from_cache(self):
+        cache_file = os.path.join(CACHE_DIR, "knowledge_base.cache")
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'rb') as f:
+                    data = pickle.load(f)
+                    self.chunks = data['chunks']
+                    self.doc_texts = data['doc_texts']
+                    self.vectorizer = data['vectorizer']
+                    self.tfidf_matrix = data['tfidf_matrix']
+                    self.loaded_files = data['loaded_files']
+                return True
+            except Exception as e:
+                st.error(f"Ошибка загрузки кэша: {e}")
+                return False
+        return False
+    
+    def get_files_hash(self):
+        """Вычисляет хеш всех PDF-файлов для проверки изменений"""
+        hash_obj = hashlib.sha256()
+        for filename in sorted(os.listdir(DOCS_DIR)):
+            if filename.lower().endswith('.pdf'):
+                filepath = os.path.join(DOCS_DIR, filename)
+                with open(filepath, 'rb') as f:
+                    while chunk := f.read(8192):
+                        hash_obj.update(chunk)
+        return hash_obj.hexdigest()
+    
+    def load_with_cache(self):
+        """Умная загрузка с проверкой хеша файлов"""
+        cache_file = os.path.join(CACHE_DIR, "knowledge_base.cache")
+        hash_file = os.path.join(CACHE_DIR, "files_hash.txt")
+        
+        current_hash = self.get_files_hash()
+        
+        # Если есть сохраненный хеш и он совпадает с текущим - загружаем из кеша
+        if os.path.exists(hash_file) and os.path.exists(cache_file):
+            with open(hash_file, 'r') as f:
+                saved_hash = f.read().strip()
+            
+            if saved_hash == current_hash:
+                if self.load_from_cache():
+                    st.success("Загружены предобработанные данные из кэша")
+                    return True
+        
+        # Если кеш невалиден - пересоздаем
+        st.info("Обновление кэша документов...")
+        self.chunks = []
+        self.doc_texts = []
+        self.loaded_files = set()
+        
+        for filename in os.listdir(DOCS_DIR):
+            if filename.lower().endswith('.pdf'):
+                file_path = os.path.join(DOCS_DIR, filename)
+                if self.process_pdf(file_path, filename):
+                    self.loaded_files.add(filename)
+                    st.success(f"Обработан документ: {filename}")
+        
+        self.build_vectorizer()
+        self.save_to_cache()
+        st.success("Кэш документов успешно обновлен!")
+        return True
 
-# Инициализация
+# Инициализация базы знаний
 if 'knowledge_base' not in st.session_state:
     st.session_state.knowledge_base = KnowledgeBase()
-    # Автоматическая загрузка файлов из папки docs
-    docs_dir = "docs"
-    if os.path.exists(docs_dir) and os.path.isdir(docs_dir):
-        for filename in os.listdir(docs_dir):
-            if filename.lower().endswith('.pdf'):
-                file_path = os.path.join(docs_dir, filename)
-                success = st.session_state.knowledge_base.load_pdf(file_path, filename)
-                if success:
-                    st.success(f"Файл {filename} успешно загружен из папки docs")
+    st.session_state.knowledge_base.load_with_cache()
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
 # Отображение загруженных документов
-if st.session_state.knowledge_base.get_document_names():
-    st.subheader("📚 Загруженные документы:")
-    for doc in st.session_state.knowledge_base.get_document_names():
+if st.session_state.knowledge_base.loaded_files:
+    st.subheader("📚 Используемые документы:")
+    for doc in sorted(st.session_state.knowledge_base.loaded_files):
         st.markdown(f"- {doc}")
 else:
-    st.info("ℹ️ В папке docs не найдено PDF-документов")
+    st.warning("В папке docs не найдено PDF-документов")
 
 # Отображение истории сообщений
 for message in st.session_state.messages:
@@ -211,7 +268,6 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Поиск наиболее релевантных чанков
     relevant_chunks = st.session_state.knowledge_base.find_most_relevant_chunks(prompt)
     
     if not relevant_chunks:
@@ -220,18 +276,17 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
         with st.chat_message("assistant"):
             st.markdown(response_text)
     else:
-        # Формируем контекст из релевантных чанков
         context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
                              for text, doc_name, page_num in relevant_chunks])
         
         full_prompt = f"""Answer strictly based on the educational materials provided below.
-     Respond in the same language the question is written in.
-     If the answer is not found in the materials, reply with: 'Answer not found in the materials'.
-    
-        educational materials: {prompt}
-        
-        relevant materials:
-        {context}"""
+Respond in the same language the question is written in.
+If the answer is not found in the materials, reply with: 'Answer not found in the materials'.
+
+Question: {prompt}
+
+Relevant materials:
+{context}"""
         
         data = {
             "model": "deepseek-chat",
@@ -250,7 +305,6 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
                     response_data = response.json()
                     full_response = response_data['choices'][0]['message']['content']
                     
-                    # Добавляем ссылки на источники
                     sources = "\n\nИсточники:\n" + "\n".join(
                         [f"- {doc_name}, стр. {page_num}" for _, doc_name, page_num in relevant_chunks]
                     )
@@ -262,13 +316,19 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
                     
                     end_time = datetime.now()
                     duration = (end_time - start_time).total_seconds()
-                    st.info(f"⏱️ Поиск ответа занял {duration:.2f} секунд")
+                    st.info(f"⏱️ Время обработки: {duration:.2f} сек")
                 else:
                     st.error(f"Ошибка API: {response.status_code} - {response.text}")
             except Exception as e:
                 st.error(f"Произошла ошибка: {str(e)}")
 
 # Кнопка очистки чата
-if st.button("Очистить чат"):
+if st.button("Очистить историю сообщений"):
     st.session_state.messages = []
+    st.rerun()
+
+# Кнопка обновления кэша
+if st.button("Обновить кэш документов"):
+    st.session_state.knowledge_base = KnowledgeBase()
+    st.session_state.knowledge_base.load_with_cache()
     st.rerun()
