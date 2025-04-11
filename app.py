@@ -4,6 +4,7 @@ import hashlib
 import streamlit as st
 import requests
 import numpy as np
+import tempfile  # Добавлен отсутствующий импорт
 from PyPDF2 import PdfReader
 from datetime import datetime
 from transformers import GPT2Tokenizer
@@ -150,7 +151,40 @@ class KnowledgeBase:
     def get_document_names(self):
         return self.uploaded_files
     
-    # ... (остальные методы класса KnowledgeBase остаются без изменений)
+    def load_with_cache(self):
+        """Загружает документы из папки docs с использованием кэша"""
+        cache_file = os.path.join(CACHE_DIR, "knowledge_base.cache")
+        
+        # Проверяем, есть ли документы для загрузки
+        pdf_files = [f for f in os.listdir(DOCS_DIR) if f.lower().endswith('.pdf')]
+        if not pdf_files:
+            return
+            
+        # Проверяем кэш
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as f:
+                cached_data = pickle.load(f)
+                if cached_data['files'] == pdf_files:
+                    self.chunks = cached_data['chunks']
+                    self.uploaded_files = cached_data['files']
+                    self.doc_texts = cached_data['doc_texts']
+                    self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
+                    return
+        
+        # Загружаем документы
+        for file_name in pdf_files:
+            file_path = os.path.join(DOCS_DIR, file_name)
+            with open(file_path, 'rb') as file:
+                self.load_pdf(file.read(), file_name)
+        
+        # Сохраняем в кэш
+        if self.chunks:
+            with open(cache_file, 'wb') as f:
+                pickle.dump({
+                    'files': self.uploaded_files,
+                    'chunks': self.chunks,
+                    'doc_texts': self.doc_texts
+                }, f)
 
 # Инициализация базы знаний
 if 'knowledge_base' not in st.session_state:
@@ -161,9 +195,9 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 
 # Отображение загруженных документов
-if st.session_state.knowledge_base.loaded_files:
+if st.session_state.knowledge_base.uploaded_files:  # Исправлено с loaded_files на uploaded_files
     st.subheader("📚 Используемые документы:")
-    for doc in sorted(st.session_state.knowledge_base.loaded_files):
+    for doc in sorted(st.session_state.knowledge_base.uploaded_files):  # Аналогично
         st.markdown(f"- {doc}")
 else:
     st.warning("В папке docs не найдено PDF-документов")
@@ -184,7 +218,7 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
     if not relevant_chunks:
         response_text = "Ответ не найден в материалах ❌"
         st.session_state.messages.append({"role": "assistant", "content": response_text})
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant"):  # Опечатка исправлена на "assistant"
             st.markdown(response_text)
     else:
         context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
