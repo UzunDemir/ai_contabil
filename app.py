@@ -12,7 +12,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 
 # 🔗 Список документов для загрузки
-LEGIS_URLS = [
+# LEGIS_URLS = [
+#     "https://www.legis.md/cautare/downloadpdf/146721",
+#     "https://www.legis.md/cautare/downloadpdf/143282",
+#     "https://www.legis.md/cautare/downloadpdf/137025",
+#     "https://www.legis.md/cautare/downloadpdf/142481",
+#     "https://www.legis.md/cautare/downloadpdf/147850",
+#     "https://www.legis.md/cautare/downloadpdf/131868"
+# ]
+
+urls = [
     "https://www.legis.md/cautare/downloadpdf/146721",
     "https://www.legis.md/cautare/downloadpdf/143282",
     "https://www.legis.md/cautare/downloadpdf/137025",
@@ -20,6 +29,22 @@ LEGIS_URLS = [
     "https://www.legis.md/cautare/downloadpdf/147850",
     "https://www.legis.md/cautare/downloadpdf/131868"
 ]
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+}
+
+for url in urls:
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        filename = url.split("/")[-1] + ".pdf"
+        with open(filename, "wb") as f:
+            f.write(response.content)
+        print(f"✅ Загружено: {filename}")
+    except Exception as e:
+        print(f"❌ Не удалось загрузить: {url} — {e}")
+
 
 
 class KnowledgeBase:
