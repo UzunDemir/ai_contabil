@@ -42,6 +42,11 @@ st.markdown("""
 
 st.sidebar.title("Описание проекта")
 st.sidebar.title("TEST-passer (AI-ассистент по тестам)")
+
+if st.button("Тест кэша"):
+    kb = KnowledgeBase()
+    kb.load_with_cache()
+    st.success(f"Файлы в cache/: {os.listdir('cache')}")
 st.sidebar.divider()
 st.sidebar.write(
     """
