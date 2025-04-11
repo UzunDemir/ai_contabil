@@ -115,9 +115,12 @@ st.markdown("""
 # st.sidebar.write("[Uzun Demir](https://uzundemir.github.io/)") #[Github](https://github.com/UzunDemir)     [Linkedin](https://www.linkedin.com/in/uzundemir/)     
 # st.sidebar.write("[Github](https://github.com/UzunDemir)")
 # st.sidebar.write("[Linkedin](https://www.linkedin.com/in/uzundemir/)")
+
+dark_mode = st.sidebar.toggle("Темная тема", value=True)
 st.sidebar.title("Описание проекта")
 st.sidebar.title("TEST-passer (AI-ассистент по тестам)")
 st.sidebar.divider()
+
 st.sidebar.write(
         """
                                        
