@@ -224,7 +224,7 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
         context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
                              for text, doc_name, page_num in relevant_chunks])
         
-        full_prompt = f"""Ты психолог. Используй для ответа строго концепции изложенные в материалах'.
+        full_prompt = f"""Ты психолог. Осознай проблему, подойди серьезно к ее решению и используя материалы дай короткие но очень мощные советы'.
     
         educational materials: {prompt}
         
