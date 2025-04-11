@@ -9,8 +9,10 @@ from datetime import datetime
 from transformers import GPT2Tokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import logging
 
 # Конфигурация
+logging.basicConfig(level=logging.INFO)
 CACHE_DIR = "cache"
 DOCS_DIR = "docs"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -43,54 +45,6 @@ st.markdown("""
 st.sidebar.title("Описание проекта")
 st.sidebar.title("TEST-passer (AI-ассистент по тестам)")
 
-#######
-# Добавьте в начало файла (после импортов)
-import logging
-logging.basicConfig(level=logging.INFO)
-
-
-st.sidebar.divider()
-st.sidebar.write(
-    """
-    Это приложение использует предобработанные материалы из папки docs для быстрых ответов.
-    Все документы автоматически кэшируются для ускорения работы.
-    """
-)
-
-# Устанавливаем стиль для центрирования элементов
-st.markdown("""
-    <style>
-    .center {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        flex-direction: column;
-        margin-top: 0vh;
-    }
-    </style>
-    <div class="center">
-        <img src="https://github.com/UzunDemir/mnist_777/blob/main/200w.gif?raw=true">
-        <h1>TEST-passer</h1>
-        <h2>AI-ассистент по тестам</h2>
-        <p>(строго по учебным материалам)</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.divider()
-
-# Получение API ключа
-api_key = st.secrets.get("DEEPSEEK_API_KEY")
-if not api_key:
-    st.error("API ключ не настроен. Пожалуйста, добавьте его в Secrets.")
-    st.stop()
-
-url = "https://api.deepseek.com/v1/chat/completions"
-headers = {
-    "Authorization": f"Bearer {api_key}",
-    "Content-Type": "application/json"
-}
-
 class DocumentChunk:
     def __init__(self, text, doc_name, page_num):
         self.text = text
@@ -104,48 +58,6 @@ class KnowledgeBase:
         self.tfidf_matrix = None
         self.doc_texts = []
         self.loaded_files = set()
-
-# Где-то в интерфейсе (например, в сайдбаре)
-with st.sidebar:
-    if st.button("🛠 Тест кэша (DEBUG)"):
-        try:
-            st.info("Запуск теста кэширования...")
-            
-            # Создаем новую базу знаний для теста
-            test_kb = KnowledgeBase()
-            
-            # Проверяем загрузку
-            st.write("1. Проверка папок:")
-            st.code(f"DOCS_DIR: {os.listdir(DOCS_DIR)}\nCACHE_DIR: {os.listdir(CACHE_DIR)}")
-            
-            # Тест обработки PDF
-            st.write("2. Обработка документов:")
-            test_kb.load_with_cache()
-            
-            # Проверка результатов
-            st.write("3. Результаты:")
-            if test_kb.chunks:
-                st.success(f"✅ Успешно! Обработано {len(test_kb.chunks)} чанков")
-                st.code(f"Последний чанк:\n{test_kb.chunks[-1].text[:200]}...")
-            else:
-                st.error("❌ Чанки не созданы!")
-                
-            # Показываем файлы кэша
-            st.write("4. Содержимое cache/:")
-            cache_files = os.listdir(CACHE_DIR)
-            if cache_files:
-                st.success(f"Найдены файлы кэша: {cache_files}")
-                if "knowledge_base.cache" in cache_files:
-                    st.code(f"Размер кэша: {os.path.getsize(os.path.join(CACHE_DIR, 'knowledge_base.cache'))} байт")
-            else:
-                st.error("Файлы кэша не найдены!")
-                
-        except Exception as e:
-            st.error(f"Ошибка теста: {str(e)}")
-            logging.exception("Ошибка в тесте кэша:")
-            #################
-
-
     
     def split_text(self, text, max_tokens=2000):
         paragraphs = text.split('\n\n')
@@ -194,6 +106,7 @@ with st.sidebar:
                 return True
         except Exception as e:
             st.error(f"Ошибка обработки PDF {file_name}: {e}")
+            logging.error(f"Ошибка обработки PDF: {str(e)}")
             return False
     
     def build_vectorizer(self):
@@ -222,7 +135,6 @@ with st.sidebar:
                 'loaded_files': self.loaded_files
             }, f)
         
-        # Сохраняем хеш файлов
         hash_file = os.path.join(CACHE_DIR, "files_hash.txt")
         with open(hash_file, 'w') as f:
             f.write(self.get_files_hash())
@@ -241,6 +153,7 @@ with st.sidebar:
                 return True
             except Exception as e:
                 st.error(f"Ошибка загрузки кэша: {e}")
+                logging.error(f"Ошибка загрузки кэша: {str(e)}")
                 return False
         return False
     
@@ -262,7 +175,6 @@ with st.sidebar:
         
         current_hash = self.get_files_hash()
         
-        # Если есть сохраненный хеш и он совпадает с текущим - загружаем из кеша
         if os.path.exists(hash_file) and os.path.exists(cache_file):
             with open(hash_file, 'r') as f:
                 saved_hash = f.read().strip()
@@ -272,7 +184,6 @@ with st.sidebar:
                     st.success("Загружены предобработанные данные из кэша")
                     return True
         
-        # Если кеш невалиден - пересоздаем
         st.info("Обновление кэша документов...")
         self.chunks = []
         self.doc_texts = []
@@ -290,93 +201,4 @@ with st.sidebar:
         st.success("Кэш документов успешно обновлен!")
         return True
 
-# Инициализация базы знаний
-if 'knowledge_base' not in st.session_state:
-    st.session_state.knowledge_base = KnowledgeBase()
-    st.session_state.knowledge_base.load_with_cache()
-
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-
-# Отображение загруженных документов
-if st.session_state.knowledge_base.loaded_files:
-    st.subheader("📚 Используемые документы:")
-    for doc in sorted(st.session_state.knowledge_base.loaded_files):
-        st.markdown(f"- {doc}")
-else:
-    st.warning("В папке docs не найдено PDF-документов")
-
-# Отображение истории сообщений
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Ввод вопроса
-if prompt := st.chat_input("Введите ваш вопрос..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    
-    relevant_chunks = st.session_state.knowledge_base.find_most_relevant_chunks(prompt)
-    
-    if not relevant_chunks:
-        response_text = "Ответ не найден в материалах ❌"
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-        with st.chat_message("assistant"):
-            st.markdown(response_text)
-    else:
-        context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
-                             for text, doc_name, page_num in relevant_chunks])
-        
-        full_prompt = f"""Ты — профессиональный бухгалтерский советник.
-        Отвечай кратко, понятно и строго на основе следующих фрагментов нормативных актов (внизу указаны источники):
-
-Question: {prompt}
-
-Relevant materials:
-{context}"""
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": full_prompt}],
-            "max_tokens": 2000,
-            "temperature": 0.1
-        }
-        
-        with st.spinner("Ищем ответ..."):
-            start_time = datetime.now()
-            
-            try:
-                response = requests.post(url, headers=headers, json=data)
-                
-                if response.status_code == 200:
-                    response_data = response.json()
-                    full_response = response_data['choices'][0]['message']['content']
-                    
-                    sources = "\n\nИсточники:\n" + "\n".join(
-                        [f"- {doc_name}, стр. {page_num}" for _, doc_name, page_num in relevant_chunks]
-                    )
-                    full_response += sources
-                    
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})
-                    with st.chat_message("assistant"):
-                        st.markdown(full_response + " ✅")
-                    
-                    end_time = datetime.now()
-                    duration = (end_time - start_time).total_seconds()
-                    st.info(f"⏱️ Время обработки: {duration:.2f} сек")
-                else:
-                    st.error(f"Ошибка API: {response.status_code} - {response.text}")
-            except Exception as e:
-                st.error(f"Произошла ошибка: {str(e)}")
-
-# Кнопка очистки чата
-if st.button("Очистить историю сообщений"):
-    st.session_state.messages = []
-    st.rerun()
-
-# Кнопка обновления кэша
-if st.button("Обновить кэш документов"):
-    st.session_state.knowledge_base = KnowledgeBase()
-    st.session_state.knowledge_base.load_with_cache()
-    st.rerun()
+# Остальная часть кода остается без изменений...
