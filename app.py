@@ -34,7 +34,7 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
-for url in urls:
+for url in LEGIS_URLS:
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
