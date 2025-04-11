@@ -279,9 +279,8 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
         context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
                              for text, doc_name, page_num in relevant_chunks])
         
-        full_prompt = f"""Answer strictly based on the educational materials provided below.
-Respond in the same language the question is written in.
-If the answer is not found in the materials, reply with: 'Answer not found in the materials'.
+        full_prompt = f"""Ты — профессиональный бухгалтерский советник.
+        Отвечай кратко, понятно и строго на основе следующих фрагментов нормативных актов (внизу указаны источники):
 
 Question: {prompt}
 
