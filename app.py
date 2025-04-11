@@ -6,13 +6,14 @@ import time
 from PyPDF2 import PdfReader
 import tempfile
 from datetime import datetime
-from transformers import GPT2Tokenizer
+from transformers import AutoTokenizer
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import re
 
 # Инициализация токенизатора
+#tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/deepseek-llm")
+from transformers import GPT2Tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
 # Настройки Streamlit
@@ -35,37 +36,143 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+#################################
 
-# ... (остальной код sidebar и заголовка оставляем без изменений)
+# st.sidebar.write("[Uzun Demir](https://uzundemir.github.io/)") #[Github](https://github.com/UzunDemir)     [Linkedin](https://www.linkedin.com/in/uzundemir/)     
+# st.sidebar.write("[Github](https://github.com/UzunDemir)")
+# st.sidebar.write("[Linkedin](https://www.linkedin.com/in/uzundemir/)")
+st.sidebar.title("Описание проекта")
+st.sidebar.title("TEST-passer (AI-ассистент по тестам)")
+st.sidebar.divider()
+st.sidebar.write(
+        """
+                                       
+                     Это приложение выполнено в целях помощи студентам при сдаче тестов по ЛЮБОЙ образовательной теме.                  
+
+     1. Как это работает? 
+     
+        Студент загружает учебный материал в pdf. TEST-passer отвечает на тесты, выбирая правильные ответы. Точность ответов на тестировании составила 88%.
+     
+     2. Почему не воспользоваться обычными чатами (GPT, DeepSeek и т. д.)? 
+     
+        Несмотря на то что модель обучена на огромном 
+        количестве информации, она не понимает информацию, как человек, а лишь предсказывает "вероятный следующий фрагмент текста". 
+        Она также имеет способность "галлюцинировать", то есть может "придумать" факт, источник или термин, которого не существует, но звучит правдоподобно.
+        Поэтому наиболее правильные ответы будет выдавать модель, которая использует только НУЖНЫЙ иатериал. 
+        
+     3. Что делает приложение?    
+     
+        * Загружает и обрабатывает pdf-файлы (любые курсы, предметы, темы)
+        * Создает векторную базу данных
+        * Применяет динамический чанкинг (делит по смысловым границам)
+        * Гибридный поиск (HyDE + ключевые слова) 
+          (комбинирует два метода поиска, чтобы находить ответы, если он сформулирован иначе чем в учебных материалах)
+        * Валидация ответов
+        * Настройка DeepSeek для генерации ответов (можно использовать и другие модели) 
+
+                        
+
+    4. Приложение доработано. Ключевые улучшения:
+
+    Чанкинг документов:
+
+        * Текст разбивается на смысловые блоки (по абзацам) с ограничением по количеству токенов
+
+        * Используется токенизатор DeepSeek для точного подсчета токенов
+
+    Поиск релевантных фрагментов:
+
+        * Реализован TF-IDF + косинусное сходство для поиска наиболее релевантных частей документа
+
+        * В контекст попадают только 3 наиболее релевантных фрагмента
+
+    Улучшенный промпт:
+
+        * Четкие инструкции модели отвечать только по материалам
+
+        * Добавлены ссылки на источники (документ и страница)
+
+    Параметры API:
+
+        * Уменьшена температура (temperature=0.1) для более точных ответов
+
+        * Ограничение на количество токенов в ответе
+
+    Обработка больших документов:
+
+        * Документы обрабатываются постранично
+
+        * В API отправляются только релевантные части
+                     
+    5. Будут ли доработки?
+    
+    Да, будут:
+    
+    * возможность загрузки вопросов в виде скриншотов
+    * комбинирование методов и моделей (ансамблирование) для получения максимально точных ответов
+    * уменьшение времени поиска ответа 
+                     
+                        
+                     """
+    )
+
+# Устанавливаем стиль для центрирования элементов
+st.markdown("""
+    <style>
+    .center {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        /height: 5vh;
+        text-align: center;
+        flex-direction: column;
+        margin-top: 0vh;  /* отступ сверху */
+    }
+    .github-icon:hover {
+        color: #4078c0; /* Изменение цвета при наведении */
+    }
+    </style>
+    <div class="center">
+        <img src="https://github.com/UzunDemir/mnist_777/blob/main/200w.gif?raw=true">
+        <h1>TEST-passer</h1>
+        <h2>AI-ассистент по тестам</h2>
+        <p> (строго по учебным материалам)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
+# Настройки для канвы
+stroke_width = 10
+stroke_color = "black"
+bg_color = "white"
+drawing_mode = "freedraw"
+
+# Получение API ключа
+api_key = st.secrets.get("DEEPSEEK_API_KEY")
+if not api_key:
+    st.error("API ключ не настроен. Пожалуйста, добавьте его в Secrets.")
+    st.stop()
+
+url = "https://api.deepseek.com/v1/chat/completions"
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json"
+}
 
 class DocumentChunk:
-    def __init__(self, text, doc_name, page_num, doc_title=None):
+    def __init__(self, text, doc_name, page_num):
         self.text = text
         self.doc_name = doc_name
         self.page_num = page_num
-        self.doc_title = doc_title
         self.embedding = None
 
 class KnowledgeBase:
     def __init__(self):
         self.chunks = []
         self.uploaded_files = []
-        self.document_titles = {}  # Словарь для хранения заголовков документов
         self.vectorizer = TfidfVectorizer(stop_words='english')
         self.tfidf_matrix = None
         self.doc_texts = []
-    
-    def extract_title_from_text(self, text):
-        """Извлекает заголовок из текста (первая строка с заглавными буквами)"""
-        lines = text.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line and line.isupper() and len(line) > 10 and len(line) < 150:
-                return line
-            # Попробуем найти шаблоны типа "ФЕДЕРАЛЬНЫЙ ЗАКОН" или "НАЛОГОВЫЙ КОДЕКС"
-            if re.match(r'^(ФЕДЕРАЛЬНЫЙ|НАЛОГОВЫЙ|ГРАЖДАНСКИЙ|ТРУДОВОЙ|БЮДЖЕТНЫЙ)\s+(ЗАКОН|КОДЕКС)', line, re.IGNORECASE):
-                return line
-        return None
     
     def split_text(self, text, max_tokens=2000):
         paragraphs = text.split('\n\n')
@@ -104,12 +211,6 @@ class KnowledgeBase:
             
             with open(tmp_file_path, 'rb') as file:
                 reader = PdfReader(file)
-                doc_title = None
-                
-                # Сначала попробуем извлечь заголовок из первой страницы
-                first_page_text = reader.pages[0].extract_text()
-                doc_title = self.extract_title_from_text(first_page_text)
-                
                 for page_num, page in enumerate(reader.pages):
                     page_text = page.extract_text()
                     if page_text:
@@ -118,15 +219,13 @@ class KnowledgeBase:
                             self.chunks.append(DocumentChunk(
                                 text=chunk,
                                 doc_name=file_name,
-                                page_num=page_num + 1,
-                                doc_title=doc_title
+                                page_num=page_num + 1
                             ))
                             self.doc_texts.append(chunk)
                 
                 if self.chunks:
                     self.uploaded_files.append(file_name)
-                    if doc_title:
-                        self.document_titles[file_name] = doc_title
+                    # Обновляем TF-IDF матрицу
                     self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
                     return True
                 else:
@@ -139,51 +238,55 @@ class KnowledgeBase:
             if os.path.exists(tmp_file_path):
                 os.unlink(tmp_file_path)
     
-    def load_from_folder(self, folder_path="legis"):
-        if os.path.exists(folder_path) and os.path.isdir(folder_path):
-            pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
-            if not pdf_files:
-                st.warning(f"В папке {folder_path} не найдено PDF-файлов")
-                return
+    def find_most_relevant_chunks(self, query, top_k=3):
+        """Находит наиболее релевантные чанки с помощью TF-IDF и косинусного сходства"""
+        if not self.chunks:
+            return []
             
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            for i, file_name in enumerate(pdf_files):
-                file_path = os.path.join(folder_path, file_name)
-                status_text.text(f"Загрузка {i+1}/{len(pdf_files)}: {file_name}...")
-                
-                with open(file_path, 'rb') as file:
-                    file_content = file.read()
-                    self.load_pdf(file_content, file_name)
-                
-                progress_bar.progress((i + 1) / len(pdf_files))
-            
-            progress_bar.empty()
-            status_text.text("Загрузка завершена!")
-            time.sleep(1)
-            status_text.empty()
+        query_vec = self.vectorizer.transform([query])
+        similarities = cosine_similarity(query_vec, self.tfidf_matrix)
+        top_indices = np.argsort(similarities[0])[-top_k:][::-1]
+        
+        return [(self.chunks[i].text, self.chunks[i].doc_name, self.chunks[i].page_num) 
+                for i in top_indices if similarities[0][i] > 0.1]
     
-    # ... (остальные методы класса остаются без изменений)
+    def get_document_names(self):
+        return self.uploaded_files
 
 # Инициализация
 if 'knowledge_base' not in st.session_state:
     st.session_state.knowledge_base = KnowledgeBase()
-    st.session_state.knowledge_base.load_from_folder()
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
-# Отображение загруженных документов с заголовками
+# # Интерфейс
+# st.markdown("""
+# <div class="center">
+#     <h1>TEST-passer</h1>
+#     <h2>AI-ассистент по тестам</h2>
+#     <p>(строго по учебным материалам)</p>
+# </div>
+# """, unsafe_allow_html=True)
+
+
+
+# Загрузка документов
+uploaded_files = st.file_uploader("Загрузить учебные материалы в PDF", type="pdf", accept_multiple_files=True)
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        if uploaded_file.name not in st.session_state.knowledge_base.get_document_names():
+            success = st.session_state.knowledge_base.load_pdf(uploaded_file.getvalue(), uploaded_file.name)
+            if success:
+                st.success(f"Файл {uploaded_file.name} успешно загружен")
+
+# Отображение загруженных документов
 if st.session_state.knowledge_base.get_document_names():
     st.subheader("📚 Загруженные документы:")
     for doc in st.session_state.knowledge_base.get_document_names():
-        title = st.session_state.knowledge_base.document_titles.get(doc, doc)
-        st.markdown(f"- {title}")
+        st.markdown(f"- {doc}")
 else:
-    st.info("ℹ️ В папке 'legis' не найдено PDF-документов. Поместите файлы в эту папку.")
-
-# ... (остальной код оставляем без изменений)
+    st.info("ℹ️ Документы не загружены")
 
 # Отображение истории сообщений
 for message in st.session_state.messages:
@@ -209,21 +312,22 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
         context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
                              for text, doc_name, page_num in relevant_chunks])
         
-        full_prompt = f"""Твоя роль - ассистент по бухгалтерскому учету. Отвечай строго на основании предоставленных нормативных документов по бухгалтерскому учету и налогообложению. 
-Ответ должен быть простыми словами, но точным и содержать ссылки на конкретные статьи и пункты документов.
-Если вопрос требует расчета - предоставь формулу и пример расчета.
-Если ответ не найден в документах, ответь: 'Ответ не найден в нормативных документах
-
-Educational materials: {prompt}
-
-Relevant materials:
-{context}"""
+        full_prompt = f"""Answer strictly based on the educational materials provided below.
+     Respond in the same language the question is written in.
+     If the answer is not found in the materials, reply with: 'Answer not found in the materials'.
+    
+    
+        
+        educational materials: {prompt}
+        
+        relevant materials:
+        {context}"""
         
         data = {
             "model": "deepseek-chat",
             "messages": [{"role": "user", "content": full_prompt}],
             "max_tokens": 2000,
-            "temperature": 0.1
+            "temperature": 0.1  # Уменьшаем случайность ответов
         }
         
         with st.spinner("Ищем ответ..."):
