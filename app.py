@@ -18,14 +18,87 @@ tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
 # Настройки Streamlit
 st.set_page_config(layout="wide", initial_sidebar_state="auto")
+# st.markdown("""
+# <meta name="viewport" content="width=device-width, initial-scale=1.0">
+# <style>
+#     .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob, 
+#     .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137, 
+#     .viewerBadge_text__1JaDK, #MainMenu, footer, header { 
+#         display: none !important; 
+#     }
+#     .center {
+#         display: flex;
+#         justify-content: center;
+#         align-items: center;
+#         text-align: center;
+#         flex-direction: column;
+#         margin-top: 0vh;
+#     }
+# </style>
+# """, unsafe_allow_html=True)
+# Замените текущий st.markdown с CSS на этот:
 st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
+    /* Основные стили для темной темы */
+    :root {
+        --primary-color: #ff4b4b;
+        --background-color: #0e1117;
+        --secondary-background-color: #262730;
+        --text-color: #f0f2f6;
+        --font: sans-serif;
+    }
+    
+    body {
+        background-color: var(--background-color);
+        color: var(--text-color);
+    }
+    
+    /* Скрытие элементов */
     .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob, 
     .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137, 
     .viewerBadge_text__1JaDK, #MainMenu, footer, header { 
         display: none !important; 
     }
+    
+    /* Стили для чата */
+    .stChatMessage {
+        background-color: var(--secondary-background-color) !important;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
+        margin: 8px 0 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    
+    .stChatMessage.user {
+        border-left: 4px solid var(--primary-color) !important;
+    }
+    
+    .stChatMessage.assistant {
+        border-left: 4px solid #4b8df8 !important;
+    }
+    
+    /* Стили для текстового ввода */
+    .stTextInput>div>div>input {
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
+        border: 1px solid #555 !important;
+    }
+    
+    /* Стили для кнопок */
+    .stButton>button {
+        background-color: var(--primary-color) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 4px !important;
+        padding: 8px 16px !important;
+    }
+    
+    .stButton>button:hover {
+        opacity: 0.9;
+    }
+    
+    /* Центрирование элементов */
     .center {
         display: flex;
         justify-content: center;
@@ -36,6 +109,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 #################################
 
 # st.sidebar.write("[Uzun Demir](https://uzundemir.github.io/)") #[Github](https://github.com/UzunDemir)     [Linkedin](https://www.linkedin.com/in/uzundemir/)     
