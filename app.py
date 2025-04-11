@@ -104,6 +104,48 @@ class KnowledgeBase:
         self.tfidf_matrix = None
         self.doc_texts = []
         self.loaded_files = set()
+
+# Где-то в интерфейсе (например, в сайдбаре)
+with st.sidebar:
+    if st.button("🛠 Тест кэша (DEBUG)"):
+        try:
+            st.info("Запуск теста кэширования...")
+            
+            # Создаем новую базу знаний для теста
+            test_kb = KnowledgeBase()
+            
+            # Проверяем загрузку
+            st.write("1. Проверка папок:")
+            st.code(f"DOCS_DIR: {os.listdir(DOCS_DIR)}\nCACHE_DIR: {os.listdir(CACHE_DIR)}")
+            
+            # Тест обработки PDF
+            st.write("2. Обработка документов:")
+            test_kb.load_with_cache()
+            
+            # Проверка результатов
+            st.write("3. Результаты:")
+            if test_kb.chunks:
+                st.success(f"✅ Успешно! Обработано {len(test_kb.chunks)} чанков")
+                st.code(f"Последний чанк:\n{test_kb.chunks[-1].text[:200]}...")
+            else:
+                st.error("❌ Чанки не созданы!")
+                
+            # Показываем файлы кэша
+            st.write("4. Содержимое cache/:")
+            cache_files = os.listdir(CACHE_DIR)
+            if cache_files:
+                st.success(f"Найдены файлы кэша: {cache_files}")
+                if "knowledge_base.cache" in cache_files:
+                    st.code(f"Размер кэша: {os.path.getsize(os.path.join(CACHE_DIR, 'knowledge_base.cache'))} байт")
+            else:
+                st.error("Файлы кэша не найдены!")
+                
+        except Exception as e:
+            st.error(f"Ошибка теста: {str(e)}")
+            logging.exception("Ошибка в тесте кэша:")
+            #################
+
+
     
     def split_text(self, text, max_tokens=2000):
         paragraphs = text.split('\n\n')
