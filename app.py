@@ -66,10 +66,89 @@ class DocumentChunk:
 class KnowledgeBase:
     def __init__(self):
         self.chunks = []
+        self.uploaded_files = []
         self.vectorizer = TfidfVectorizer(stop_words='english')
         self.tfidf_matrix = None
         self.doc_texts = []
-        self.loaded_files = set()
+    
+    def split_text(self, text, max_tokens=2000):
+        paragraphs = text.split('\n\n')
+        chunks = []
+        current_chunk = ""
+        
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+                
+            tokens = tokenizer.tokenize(para)
+            if len(tokenizer.tokenize(current_chunk + para)) > max_tokens:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                    current_chunk = para
+                else:
+                    chunks.append(para)
+                    current_chunk = ""
+            else:
+                if current_chunk:
+                    current_chunk += "\n\n" + para
+                else:
+                    current_chunk = para
+        
+        if current_chunk:
+            chunks.append(current_chunk)
+            
+        return chunks
+    
+    def load_pdf(self, file_content, file_name):
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                tmp_file.write(file_content)
+                tmp_file_path = tmp_file.name
+            
+            with open(tmp_file_path, 'rb') as file:
+                reader = PdfReader(file)
+                for page_num, page in enumerate(reader.pages):
+                    page_text = page.extract_text()
+                    if page_text:
+                        chunks = self.split_text(page_text)
+                        for chunk in chunks:
+                            self.chunks.append(DocumentChunk(
+                                text=chunk,
+                                doc_name=file_name,
+                                page_num=page_num + 1
+                            ))
+                            self.doc_texts.append(chunk)
+                
+                if self.chunks:
+                    self.uploaded_files.append(file_name)
+                    # Обновляем TF-IDF матрицу
+                    self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
+                    return True
+                else:
+                    st.error(f"Не удалось извлечь текст из файла {file_name}")
+                    return False
+        except Exception as e:
+            st.error(f"Ошибка загрузки PDF: {e}")
+            return False
+        finally:
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+    
+    def find_most_relevant_chunks(self, query, top_k=3):
+        """Находит наиболее релевантные чанки с помощью TF-IDF и косинусного сходства"""
+        if not self.chunks:
+            return []
+            
+        query_vec = self.vectorizer.transform([query])
+        similarities = cosine_similarity(query_vec, self.tfidf_matrix)
+        top_indices = np.argsort(similarities[0])[-top_k:][::-1]
+        
+        return [(self.chunks[i].text, self.chunks[i].doc_name, self.chunks[i].page_num) 
+                for i in top_indices if similarities[0][i] > 0.1]
+    
+    def get_document_names(self):
+        return self.uploaded_files
     
     # ... (остальные методы класса KnowledgeBase остаются без изменений)
 
