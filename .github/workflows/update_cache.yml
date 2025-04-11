@@ -1,0 +1,27 @@
+name: Update Knowledge Cache
+
+on:
+  push:
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+# Добавьте этот блок permissions
+permissions:
+  contents: write  # Разрешить запись в репозиторий
+
+jobs:
+  update-cache:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Важно для работы git-auto-commit
+    
+    # ... остальные шаги ...
+    
+    - uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: "Auto-update knowledge cache"
+        branch: ${{ github.ref_name }}  # Указываем текущую ветку
