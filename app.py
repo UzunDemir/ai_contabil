@@ -98,7 +98,8 @@ class KnowledgeBase:
     def __init__(self):
         self.chunks = []
         self.uploaded_files = []
-        self.vectorizer = TfidfVectorizer(stop_words='russian')
+        # Используем список стоп-слов для русского языка
+        self.vectorizer = TfidfVectorizer(stop_words=None)  # Убрали 'russian'
         self.tfidf_matrix = None
         self.doc_texts = []
     
@@ -236,7 +237,7 @@ if prompt := st.chat_input("Введите ваш вопрос по бухгал
                              for text, doc_name, page_num in relevant_chunks])
         
         full_prompt = f"""Отвечай строго на основании предоставленных нормативных документов по бухгалтерскому учету и налогообложению. 
-Ответ должен быть простыми словами, точным и содержать ссылки на конкретные статьи и пункты документов.
+Ответ должен быть точным и содержать ссылки на конкретные статьи и пункты документов.
 Если вопрос требует расчета - предоставь формулу и пример расчета.
 Если ответ не найден в документах, ответь: 'Ответ не найден в нормативных документах'.
 
