@@ -36,7 +36,10 @@ headers = {
 
 for url in LEGIS_URLS:
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        # Увеличиваем тайм-аут до 60 секунд
+        response = requests.get(url, headers=headers, timeout=60)
+
+        #response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         filename = url.split("/")[-1] + ".pdf"
         with open(filename, "wb") as f:
