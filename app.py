@@ -242,9 +242,10 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
         context = "\n\n".join([f"Документ: {doc_name}, страница {page_num}\n{text}" 
                              for text, doc_name, page_num in relevant_chunks])
         
-        full_prompt = f"""Answer strictly based on the educational materials provided below.
-Respond in the same language the question is written in.
-If the answer is not found in the materials, reply with: 'Answer not found in the materials'.
+        full_prompt = f"""Твоя роль - ассистент по бухгалтерскому учету. Отвечай строго на основании предоставленных нормативных документов по бухгалтерскому учету и налогообложению. 
+Ответ должен быть простыми словами, но точным и содержать ссылки на конкретные статьи и пункты документов.
+Если вопрос требует расчета - предоставь формулу и пример расчета.
+Если ответ не найден в документах, ответь: 'Ответ не найден в нормативных документах
 
 Educational materials: {prompt}
 
