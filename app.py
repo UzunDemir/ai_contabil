@@ -21,7 +21,7 @@ API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 #     "https://www.legis.md/cautare/downloadpdf/131868"
 # ]
 
-urls = [
+LEGIS_URLS = [
     "https://www.legis.md/cautare/downloadpdf/146721",
     "https://www.legis.md/cautare/downloadpdf/143282",
     "https://www.legis.md/cautare/downloadpdf/137025",
