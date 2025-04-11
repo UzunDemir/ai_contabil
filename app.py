@@ -236,7 +236,7 @@ if prompt := st.chat_input("Введите ваш вопрос..."):
             "model": "deepseek-chat",
             "messages": [{"role": "user", "content": full_prompt}],
             "max_tokens": 2000,
-            "temperature": 0.1
+            "temperature": 0.5
         }
         
         with st.spinner("Ищем ответ..."):
